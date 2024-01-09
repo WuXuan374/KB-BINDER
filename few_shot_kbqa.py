@@ -22,6 +22,20 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger("time recoder")
 
+api_key_list = list()
+
+def get_api_key():
+    global api_key_list
+    current_api_key = api_key_list.pop(0)
+    api_key_list.append(current_api_key)
+    return current_api_key
+
+def load_json(fname, mode="r", encoding="utf8"):
+    if "b" in mode:
+        encoding = None
+    with open(fname, mode=mode, encoding=encoding) as f:
+        return json.load(f)
+
 def select_shot_prompt_train(train_data_in, shot_number):
     random.shuffle(train_data_in)
     compare_list = ["le", "ge", "gt", "lt", "ARGMIN", "ARGMAX"]
@@ -71,14 +85,14 @@ def sub_mid_to_fn(question, string, question_to_mid_dict):
     return new_string
 
 
-def type_generator(question, prompt_type, api_key, LLM_engine):
+def type_generator(question, prompt_type, LLM_engine):
     sleep(1)
     prompt = prompt_type
     prompt = prompt + " Question: " + question + "Type of the question: "
     got_result = False
     while got_result != True:
         try:
-            openai.api_key = api_key
+            openai.api_key = get_api_key()
             answer_modi = openai.Completion.create(
                 engine=LLM_engine,
                 prompt=prompt,
@@ -96,7 +110,7 @@ def type_generator(question, prompt_type, api_key, LLM_engine):
     return gene_exp
 
 
-def ep_generator(question, selected_examples, temp, que_to_s_dict_train, question_to_mid_dict, api_key, LLM_engine,
+def ep_generator(question, selected_examples, temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
                  retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None, retrieve_number=100):
     if retrieval:
         tokenized_query = nlp_model(question)
@@ -116,7 +130,7 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
     got_result = False
     while got_result != True:
         try:
-            openai.api_key = api_key
+            openai.api_key = get_api_key()
             answer_modi = openai.Completion.create(
                 engine=LLM_engine,
                 prompt=prompt,
@@ -418,7 +432,7 @@ def process_file_codex_output(filename_before, filename_after):
 
 def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_compose, selected_quest,
                             prompt_type, hsearcher, rela_corpus, relationships, temp, que_to_s_dict_train,
-                            question_to_mid_dict, api_key, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
+                            question_to_mid_dict, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
                             relationship_to_enti, retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None,
                             retrieve_number=100):
     correct = [0] * 6
@@ -433,7 +447,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         for ans in data["answer"]:
             label.append(ans["answer_argument"])
         if not retrieval:
-            gene_type = type_generator(data["question"], prompt_type, api_key, LLM_engine)
+            gene_type = type_generator(data["question"], prompt_type, LLM_engine)
             logger.info("gene_type: {}".format(gene_type))
         else:
             gene_type = None
@@ -441,13 +455,13 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         if gene_type == "Comparison":
             gene_exps = ep_generator(data["question"],
                                      list(set(selected_quest_compare) | set(selected_quest)),
-                                     temp, que_to_s_dict_train, question_to_mid_dict, api_key, LLM_engine,
+                                     temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
                                      retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
                                      bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
         else:
             gene_exps = ep_generator(data["question"],
                                      list(set(selected_quest_compose) | set(selected_quest)),
-                                     temp, que_to_s_dict_train, question_to_mid_dict, api_key, LLM_engine,
+                                     temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
                                      retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
                                      bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
         two_hop_rela_dict = {}
@@ -525,8 +539,8 @@ def parse_args():
                         default=40, help='the number of shots used in in-context demo')
     parser.add_argument('--temperature', type=float, metavar='N',
                         default=0.3, help='the temperature of LLM')
-    parser.add_argument('--api_key', type=str, metavar='N',
-                        default=None, help='the api key to access LLM')
+    parser.add_argument('--api_key_list_file', type=str, metavar='N',
+                        default=None, help='file to store api keys')
     parser.add_argument('--engine', type=str, metavar='N',
                         default="code-davinci-002", help='engine name of LLM')
     parser.add_argument('--retrieval', action='store_true', help='whether to use retrieval-augmented KB-BINDER')
@@ -544,6 +558,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    global api_key_list
+    api_key_list = load_json(args.api_key_list_file)
     nlp = spacy.load("en_core_web_sm")
     bm25_searcher = LuceneSearcher('contriever_fb_relation/index_relation_fb')
     query_encoder = AutoQueryEncoder(encoder_dir='facebook/contriever', pooling='mean')
@@ -608,7 +624,7 @@ def main():
     bm25_all_fns = BM25Okapi(tokenized_all_fns)
     all_combiner_evaluation(dev_data, selected_quest_compose, selected_quest_compare, selected_quest, prompt_type,
                             hsearcher, rela_corpus, relationships, args.temperature, que_to_s_dict_train,
-                            question_to_mid_dict, args.api_key, args.engine, name_to_id_dict, bm25_all_fns,
+                            question_to_mid_dict, args.engine, name_to_id_dict, bm25_all_fns,
                             all_fns, relationship_to_enti, retrieval=args.retrieval, corpus=corpus, nlp_model=nlp,
                             bm25_train_full=bm25_train_full, retrieve_number=args.shot_num)
 
