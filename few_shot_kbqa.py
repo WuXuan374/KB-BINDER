@@ -14,15 +14,39 @@ from pyserini.search.hybrid import HybridSearcher
 from pyserini.search.faiss import AutoQueryEncoder
 import random
 import itertools
+from tqdm import tqdm
+import time
+import os
+import copy
+from datetime import datetime
+from collections import defaultdict
 
+def dump_json(obj, fname, indent=4, mode='w' ,encoding="utf8", ensure_ascii=False):
+    """
+    @param: ensure_ascii: `False`, 字符原样输出；`True`: 对于非 ASCII 字符进行转义
+    """
+    if "b" in mode:
+        encoding = None
+    with open(fname, "w", encoding=encoding) as f:
+        return json.dump(obj, f, indent=indent, ensure_ascii=ensure_ascii)
 
-logging.getLogger().setLevel(logging.INFO)
-logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
-                    level=logging.INFO,
-                    datefmt='%Y-%m-%d %H:%M:%S')
-logger = logging.getLogger("time recoder")
+def setup_custom_logger(log_file_name):
+    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+    fileHandler = logging.FileHandler(log_file_name, mode='a')
+    fileHandler.setFormatter(formatter)
+
+    # 根据日志文件名，创建 Logger 实例；可以从不同的地方写入相同的 Log 文件
+    logger = logging.getLogger(log_file_name)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(fileHandler)
+    logger.addHandler(logging.StreamHandler()) # Write to stdout as well
+    time_ = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+    logger.info(f"Start logging: {time_}")
+
+    return logger
 
 api_key_list = list()
+logger = None
 
 def get_api_key():
     global api_key_list
@@ -37,6 +61,7 @@ def load_json(fname, mode="r", encoding="utf8"):
         return json.load(f)
 
 def select_shot_prompt_train(train_data_in, shot_number):
+    train_data_in = [ex for ex in train_data_in if ex['s_expression']]
     random.shuffle(train_data_in)
     compare_list = ["le", "ge", "gt", "lt", "ARGMIN", "ARGMAX"]
     if shot_number == 1:
@@ -93,9 +118,9 @@ def type_generator(question, prompt_type, LLM_engine):
     while got_result != True:
         try:
             openai.api_key = get_api_key()
-            answer_modi = openai.Completion.create(
-                engine=LLM_engine,
-                prompt=prompt,
+            answer_modi = openai.ChatCompletion.create(
+                model=LLM_engine,
+                messages=[{'role': 'user', 'content': prompt}],
                 temperature=0,
                 max_tokens=256,
                 top_p=1,
@@ -104,9 +129,10 @@ def type_generator(question, prompt_type, LLM_engine):
                 stop=["Question: "]
             )
             got_result = True
-        except:
+        except Exception as e:
+            logger.info(f"type_generator() exception: {e}")
             sleep(3)
-    gene_exp = answer_modi["choices"][0]["text"].strip()
+    gene_exp = answer_modi["choices"][0]['message']['content'].strip()
     return gene_exp
 
 
@@ -131,22 +157,23 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
     while got_result != True:
         try:
             openai.api_key = get_api_key()
-            answer_modi = openai.Completion.create(
-                engine=LLM_engine,
-                prompt=prompt,
+            answer_modi = openai.ChatCompletion.create(
+                model=LLM_engine,
+                messages=[{'role': 'user', 'content': prompt}],
                 temperature=temp,
                 max_tokens=256,
                 top_p=1,
                 frequency_penalty=0,
                 presence_penalty=0,
                 stop=["Question: "],
-                n=7
+                n=7 # 默认对于一个问题给出 7 个回答
             )
             got_result = True
-        except:
+        except Exception as e:
+            logger.error(f"ep_generator exception: {e}")
             sleep(3)
-    gene_exp = [exp["text"].strip() for exp in answer_modi["choices"]]
-    return gene_exp
+    gene_exp = [exp['message']['content'].strip() for exp in answer_modi["choices"]] # TODO: 这里是不是把 KB-Binder(6) 写死了
+    return gene_exp # 有时候，chatGPT 返回的多个结果是一致的
 
 
 def convert_to_frame(s_exp):
@@ -434,11 +461,16 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                             prompt_type, hsearcher, rela_corpus, relationships, temp, que_to_s_dict_train,
                             question_to_mid_dict, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
                             relationship_to_enti, retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None,
-                            retrieve_number=100):
+                            retrieve_number=100, output_dir=None):
     correct = [0] * 6
     total = [0] * 6
     no_ans = [0] * 6
-    for data in data_batch:
+    gold_answer_list = [] # 每个问题的 gold answer
+    predicted_answer_list = [] # 每个问题，最后通过多数投票投出来的答案
+    executable_lf_list:list[list] = [] # 每个问题，多数投票得出的答案所对应的 executable lf 列表，嵌套 list
+    exec_time_list = [] # 每个问题运行时间
+    for data_index, data in enumerate(data_batch):
+        st_time = time.time()
         logger.info("==========")
         logger.info("data[id]: {}".format(data["id"]))
         logger.info("data[question]: {}".format(data["question"]))
@@ -446,6 +478,8 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         label = []
         for ans in data["answer"]:
             label.append(ans["answer_argument"])
+        gold_answer_list.append(copy.deepcopy(label))
+        
         if not retrieval:
             gene_type = type_generator(data["question"], prompt_type, LLM_engine)
             logger.info("gene_type: {}".format(gene_type))
@@ -465,11 +499,18 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                                      retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
                                      bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
         two_hop_rela_dict = {}
+        '''
+        注意，这几个结构定义在 draft 的遍历之上
+        可以认为完成所有 draft 的遍历之后，这边记录的是所有 draft 的结果总和
+        包括最后一个 draft 的遍历结束之后， Majority voting 的结果也是所有 draft 的 majority voting 结果
+        TODO: 通过 debug 验证
+        '''
         answer_candi = []
         removed_none_candi = []
-        answer_to_grounded_dict = {}
+        answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
         logger.info("gene_exps: {}".format(gene_exps))
-        scouts = gene_exps[:6]
+        scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
+        em_in_scouts = [] # 该问题，所有 draft 的 em
         for idx, gene_exp in enumerate(scouts):
             try:
                 logger.info("gene_exp: {}".format(gene_exp))
@@ -494,7 +535,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                                                                               hsearcher, rela_corpus, relationships)
                     answer_candi.append(answer)
                     if answer is not None:
-                        answer_to_grounded_dict[tuple(answer)] = bounded_exp
+                        answer_to_grounded_dict[tuple(answer)].append(bounded_exp)
                 for ans in answer_candi:
                     if ans != None:
                         removed_none_candi.append(ans)
@@ -502,16 +543,16 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                     answer = None
                 else:
                     count_dict = Counter([tuple(candi) for candi in removed_none_candi])
-                    logger.info("count_dict: {}".format(count_dict))
+                    # logger.info("count_dict: {}".format(count_dict))
                     answer = max(count_dict, key=count_dict.get)
-            except:
+            except: # 这个 draft 出错了，还是可以根据之前 draft 的结果，给个答案
                 if not removed_none_candi:
                     answer = None
                 else:
                     count_dict = Counter([tuple(candi) for candi in removed_none_candi])
-                    logger.info("count_dict: {}".format(count_dict))
+                    # logger.info("count_dict: {}".format(count_dict))
                     answer = max(count_dict, key=count_dict.get)
-            answer_to_grounded_dict[None] = ""
+            answer_to_grounded_dict[None] = list()
             logger.info("predicted_answer: {}".format(answer))
             logger.info("label: {}".format(label))
             if answer is None:
@@ -520,6 +561,9 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                 correct[idx] += 1
             total[idx] += 1
             em_score = correct[idx] / total[idx]
+
+            em_in_scouts.append(em_score) # 该 draft 对应所有 executable 的 EM
+
             logger.info("================================================================")
             logger.info("consistent candidates number: {}".format(idx+1))
             logger.info("em_score: {}".format(em_score))
@@ -529,6 +573,25 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
             logger.info(" ")
             logger.info("================================================================")
 
+        logger.info("\n\n")
+        logger.info(f"final answer after consistency check: {answer}")
+        end_time = time.time()
+        exec_time_list.append(end_time - st_time)
+        predicted_answer_list.append(answer)
+        executable_lf_list.append(copy.deepcopy(answer_to_grounded_dict[answer]))
+
+    results = list()
+    for (data, gold_answer, predicted_answer, executable_lf, exec_time) in zip(
+        data_batch, gold_answer_list, predicted_answer_list, executable_lf_list, exec_time_list
+    ):
+        results.append({
+            "qid": data["id"],
+            "gold_answer": tuple(gold_answer),
+            "predicted_answer": tuple(predicted_answer),
+            "executable_lf": executable_lf,
+            "exection_time": exec_time
+        })
+    dump_json(results, os.path.join(output_dir, "results.json"))
 
 
 
@@ -552,6 +615,7 @@ def parse_args():
                         default="data/GrailQA/fb_roles", help='freebase roles file path')
     parser.add_argument('--surface_map_path', type=str, metavar='N',
                         default="data/surface_map_file_freebase_complete_all_mention", help='surface map file path')
+    parser.add_argument('--do_debug', type=str, metavar='N', default=None) # "true" 则 debug; launch.json 怎么传 Bool 值
 
     args = parser.parse_args()
     return args
@@ -560,13 +624,24 @@ def main():
     args = parse_args()
     global api_key_list
     api_key_list = load_json(args.api_key_list_file)
+    global logger
+    if args.do_debug == "true":
+        output_dir = None
+        logger = setup_custom_logger("output/test/log.txt")
+    else:
+        current_time = datetime.now()
+        output_dir = f"output/{args.eva_data_path.split('/')[-1]}_{current_time.strftime('%Y-%m-%d_%H:%M:%S')}"
+        os.makedirs(output_dir, exist_ok=True)
+        logger = setup_custom_logger(
+            os.path.join(output_dir, "log.txt")
+        )
     nlp = spacy.load("en_core_web_sm")
     bm25_searcher = LuceneSearcher('contriever_fb_relation/index_relation_fb')
     query_encoder = AutoQueryEncoder(encoder_dir='facebook/contriever', pooling='mean')
     contriever_searcher = FaissSearcher('contriever_fb_relation/freebase_contriever_index', query_encoder)
     hsearcher = HybridSearcher(contriever_searcher, bm25_searcher)
     rela_corpus = LuceneSearcher('contriever_fb_relation/index_relation_fb')
-    dev_data = process_file(args.eva_data_path)
+    dev_data = process_file(args.eva_data_path)[:5]
     train_data = process_file(args.train_data_path)
     que_to_s_dict_train = {data["question"]: data["s_expression"] for data in train_data}
     question_to_mid_dict = process_file_node(args.train_data_path)
@@ -579,7 +654,7 @@ def main():
     all_ques = selected_quest_compose + selected_quest_compare
     corpus = [data["question"] for data in train_data]
     tokenized_train_data = []
-    for doc in corpus:
+    for doc in tqdm(corpus, desc="tokenizing"):
         nlp_doc = nlp(doc)
         tokenized_train_data.append([token.lemma_ for token in nlp_doc])
     bm25_train_full = BM25Okapi(tokenized_train_data)
@@ -606,27 +681,32 @@ def main():
         entities_set.append(info[2])
         relationship_to_enti[info[1]] = [info[0], info[2]]
 
-    with open(args.surface_map_path) as f:
-        lines = f.readlines()
-    name_to_id_dict = {}
-    for line in lines:
-        info = line.split("\t")
-        name = info[0]
-        score = float(info[1])
-        mid = info[2].strip()
-        if name in name_to_id_dict:
-            name_to_id_dict[name][mid] = score
-        else:
-            name_to_id_dict[name] = {}
-            name_to_id_dict[name][mid] = score
-    all_fns = list(name_to_id_dict.keys())
-    tokenized_all_fns = [fn.split() for fn in all_fns]
-    bm25_all_fns = BM25Okapi(tokenized_all_fns)
+    if args.do_debug != "true":
+        with open(args.surface_map_path) as f:
+            lines = f.readlines()
+        name_to_id_dict = {}
+        for line in tqdm(lines, desc="Enumerating surface map"): # 加载需要十分钟左右
+            info = line.split("\t")
+            name = info[0]
+            score = float(info[1])
+            mid = info[2].strip()
+            if name in name_to_id_dict:
+                name_to_id_dict[name][mid] = score
+            else:
+                name_to_id_dict[name] = {}
+                name_to_id_dict[name][mid] = score
+        all_fns = list(name_to_id_dict.keys())
+        tokenized_all_fns = [fn.split() for fn in all_fns]
+        bm25_all_fns = BM25Okapi(tokenized_all_fns)
+    else: # TODO: 处理后续影响
+        name_to_id_dict = {}
+        all_fns = list()
+        bm25_all_fns = BM25Okapi(list(['debug']))
     all_combiner_evaluation(dev_data, selected_quest_compose, selected_quest_compare, selected_quest, prompt_type,
                             hsearcher, rela_corpus, relationships, args.temperature, que_to_s_dict_train,
                             question_to_mid_dict, args.engine, name_to_id_dict, bm25_all_fns,
                             all_fns, relationship_to_enti, retrieval=args.retrieval, corpus=corpus, nlp_model=nlp,
-                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num)
+                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num, output_dir=output_dir)
 
 if __name__=="__main__":
     main()

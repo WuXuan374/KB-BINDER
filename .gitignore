@@ -1,4 +1,6 @@
 api_keys/
 data/
 contriever_fb_relation/
+output/
+.vscode/
 __pycache__
