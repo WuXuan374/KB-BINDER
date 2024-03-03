@@ -46,12 +46,15 @@ def setup_custom_logger(log_file_name):
     return logger
 
 api_key_list = list()
+api_call_count = 0
 logger = None
 
 def get_api_key():
-    global api_key_list
+    global api_key_list, api_call_count
     current_api_key = api_key_list.pop(0)
     api_key_list.append(current_api_key)
+    api_call_count += 1
+    logger.info(f"api_call_count: {api_call_count}")
     return current_api_key
 
 def load_json(fname, mode="r", encoding="utf8"):
@@ -476,7 +479,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         logger.info("data[question]: {}".format(data["question"]))
         logger.info("data[exp]: {}".format(data["s_expression"]))
         label = []
-        for ans in data["answer"]:
+        for ans in data["answer"]: # gold answer
             label.append(ans["answer_argument"])
         gold_answer_list.append(copy.deepcopy(label))
         
@@ -486,6 +489,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         else:
             gene_type = None
 
+        '''ChatGPT 调用处，每个样本调用 7 次 chatGPT'''
         if gene_type == "Comparison":
             gene_exps = ep_generator(data["question"],
                                      list(set(selected_quest_compare) | set(selected_quest)),
@@ -508,7 +512,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         answer_candi = []
         removed_none_candi = []
         answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
-        logger.info("gene_exps: {}".format(gene_exps))
+        '''gene_exps: 长度为 7 的 list, 每个元素形如 (JOIN (R people.person.profession) (AND (JOIN (R government.politician.government_positions_held) james k polk) (JOIN (R government.government_position_held.title) president)))'''
         scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
         em_in_scouts = [] # 该问题，所有 draft 的 em
         for idx, gene_exp in enumerate(scouts):
@@ -524,10 +528,9 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                 found_names = find_friend_name(gene_exp, data["question"])
                 found_mids = from_fn_to_id_set(found_names, data["question"], name_to_id_dict, bm25_all_fns, all_fns)
                 found_mids = [mids[:top_mid] for mids in found_mids]
-                mid_combinations = list(itertools.product(*found_mids))
-                logger.info("all_iters: {}".format(mid_combinations))
+                mid_combinations = list(itertools.product(*found_mids)) # gene_exp 中实体 label 所对应实体 mid 的组合
                 for mid_iters in mid_combinations:
-                    logger.info("mid_iters: {}".format(mid_iters))
+                    # 尝试每一种实体的 mid 组合，（看看能否产生可执行的 S-expression）
                     replaced_exp = convz_fn_to_mids(gene_exp, found_names, mid_iters)
 
                     answer, two_hop_rela_dict, bounded_exp = bound_to_existed(data["question"], replaced_exp, mid_iters,
@@ -544,7 +547,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                 else:
                     count_dict = Counter([tuple(candi) for candi in removed_none_candi])
                     # logger.info("count_dict: {}".format(count_dict))
-                    answer = max(count_dict, key=count_dict.get)
+                    answer = max(count_dict, key=count_dict.get) # 这个 gene_exp 的 Majority Voting 结果
             except: # 这个 draft 出错了，还是可以根据之前 draft 的结果，给个答案
                 if not removed_none_candi:
                     answer = None
@@ -553,7 +556,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                     # logger.info("count_dict: {}".format(count_dict))
                     answer = max(count_dict, key=count_dict.get)
             answer_to_grounded_dict[None] = list()
-            logger.info("predicted_answer: {}".format(answer))
+            logger.info("predicted_answer: {}".format(answer)) # 这个 gene_exp 导出的所有可执行 S-expression 的 Majority Voting 结果
             logger.info("label: {}".format(label))
             if answer is None:
                 no_ans[idx] += 1
@@ -587,7 +590,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         results.append({
             "qid": data["id"],
             "gold_answer": tuple(gold_answer),
-            "predicted_answer": tuple(predicted_answer),
+            "predicted_answer": tuple(predicted_answer) if (predicted_answer is not None) else None,
             "executable_lf": executable_lf,
             "exection_time": exec_time
         })
@@ -641,7 +644,7 @@ def main():
     contriever_searcher = FaissSearcher('contriever_fb_relation/freebase_contriever_index', query_encoder)
     hsearcher = HybridSearcher(contriever_searcher, bm25_searcher)
     rela_corpus = LuceneSearcher('contriever_fb_relation/index_relation_fb')
-    dev_data = process_file(args.eva_data_path)[:5]
+    dev_data = process_file(args.eva_data_path)
     train_data = process_file(args.train_data_path)
     que_to_s_dict_train = {data["question"]: data["s_expression"] for data in train_data}
     question_to_mid_dict = process_file_node(args.train_data_path)

@@ -33,11 +33,23 @@ conda activate /home4/xwu/.conda/envs/kb-binder
 
 # 代码修改
 
+## 理一下我们所需的数据
+对于每个样本会（通过大模型）生成 6 个 gene_exp
+对于每个 gene_exp 会获得 n 个可执行 Sexp (n 不固定)
+
+answer: 对于一个样本的所有可执行 Sexp 的执行结果做 Majority Voting 得到的
+answer_to_grounded_dict: 在这个样本中，answer 到 可执行 Sexp 的映射
+
+我们要做的: 对于每个样本，收集 answer 和 answer_to_grounded_dict
+answer_to_grounded_dict[answer] 我们均视为 KB-BINDER 的输出
+- 首先检查执行结果是否都是 answer
+- 其次在评价的时候，对于所有可执行 Sexp, 我们取评价最好的那个？
+
 # 代码执行
 ## KB-BINDER (6) WebQSP
 ```
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
- --api_key_list_file api_keys/shared/openai_keys.json --engine gpt-3.5-turbo \
+ --api_key_list_file api_keys/exclusive/openai_keys_0.json --engine gpt-3.5-turbo \
  --train_data_path data/webqsp_0107.train.json --eva_data_path data/webqsp_0107.test.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention
 ```
