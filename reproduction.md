@@ -26,12 +26,13 @@ conda activate /home4/xwu/.conda/envs/kb-binder
     - 同一个问题下，记录答案到所有（执行结果为这个答案的）lf 的映射
 - 参考黄祥学长这边的改动
     - 增加了输出的内容
+- process_one_example()
+    - 把每个数据集样本的 QA 过程放在这个函数里
+    - 目的是可以检查是否超时；作为一个函数，超时的时候直接 return 即可（Python 没有 goto）
 # 关键点（坑）记录
 - 生成的 S-expression 是旧版格式的, 我们计算等价时做好适配
 - 不确定 openai 版本是啥，可能会报错
 - 默认的代码设定，好像就实现了 Majority Voting, 应该是 KB-Binder (6)
-
-# 代码修改
 
 ## 理一下我们所需的数据
 对于每个样本会（通过大模型）生成 6 个 gene_exp
@@ -46,10 +47,31 @@ answer_to_grounded_dict[answer] 我们均视为 KB-BINDER 的输出
 - 其次在评价的时候，对于所有可执行 Sexp, 我们取评价最好的那个？
 
 # 代码执行
-## KB-BINDER (6) WebQSP
+## KB-BINDER (6) WebQSP 1000
+论文中说是 100 shot
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --api_key_list_file api_keys/exclusive/openai_keys_2.json --engine gpt-3.5-turbo \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/webqsp_0107.test.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600
+```
+## KB-BINDER (6) GrailQA 1000
+论文中说是 40 shot
 ```
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
- --api_key_list_file api_keys/exclusive/openai_keys_0.json --engine gpt-3.5-turbo \
- --train_data_path data/webqsp_0107.train.json --eva_data_path data/webqsp_0107.test.json \
+ --api_key_list_file api_keys/exclusive/openai_keys_1.json --engine gpt-3.5-turbo \
+ --train_data_path data/grailqa_v1.0_train.json --eva_data_path data/grailqa_v1.0_dev.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600
+```
+
+## KB-BINDER (6) CWQ 200
+Follow GrailQA 的设置，40 shot
+CWQ 有几点需要注意
+- topic_entity 和 topic_entity_name
+
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --api_key_list_file api_keys/exclusive/openai_keys_3.json --engine gpt-3.5-turbo \
+ --train_data_path data/cwq.train.json  --eva_data_path data/cwq.test.200.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention
 ```

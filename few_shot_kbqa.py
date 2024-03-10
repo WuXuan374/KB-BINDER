@@ -460,11 +460,147 @@ def process_file_codex_output(filename_before, filename_after):
         codex_eps_dict_before[key] = codex_eps_dict_after[key]
     return codex_eps_dict_before
 
+# def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_compose, selected_quest,
+#                             prompt_type, hsearcher, rela_corpus, relationships, temp, que_to_s_dict_train,
+#                             question_to_mid_dict, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
+#                             relationship_to_enti, retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None,
+#                             retrieve_number=100, output_dir=None):
+#     correct = [0] * 6
+#     total = [0] * 6
+#     no_ans = [0] * 6
+#     gold_answer_list = [] # 每个问题的 gold answer
+#     predicted_answer_list = [] # 每个问题，最后通过多数投票投出来的答案
+#     executable_lf_list:list[list] = [] # 每个问题，多数投票得出的答案所对应的 executable lf 列表，嵌套 list
+#     exec_time_list = [] # 每个问题运行时间
+#     for data_index, data in enumerate(data_batch):
+#         st_time = time.time()
+#         logger.info("==========")
+#         logger.info("data[id]: {}".format(data["id"]))
+#         logger.info("data[question]: {}".format(data["question"]))
+#         logger.info("data[exp]: {}".format(data["s_expression"]))
+#         label = []
+#         for ans in data["answer"]: # gold answer
+#             label.append(ans["answer_argument"])
+#         gold_answer_list.append(copy.deepcopy(label))
+        
+#         if not retrieval:
+#             gene_type = type_generator(data["question"], prompt_type, LLM_engine)
+#             logger.info("gene_type: {}".format(gene_type))
+#         else:
+#             gene_type = None
+
+#         '''ChatGPT 调用处，每个样本调用 7 次 chatGPT'''
+#         if gene_type == "Comparison":
+#             gene_exps = ep_generator(data["question"],
+#                                      list(set(selected_quest_compare) | set(selected_quest)),
+#                                      temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
+#                                      retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
+#                                      bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
+#         else:
+#             gene_exps = ep_generator(data["question"],
+#                                      list(set(selected_quest_compose) | set(selected_quest)),
+#                                      temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
+#                                      retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
+#                                      bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
+#         two_hop_rela_dict = {}
+#         '''
+#         注意，这几个结构定义在 draft 的遍历之上
+#         可以认为完成所有 draft 的遍历之后，这边记录的是所有 draft 的结果总和
+#         包括最后一个 draft 的遍历结束之后， Majority voting 的结果也是所有 draft 的 majority voting 结果
+#         TODO: 通过 debug 验证
+#         '''
+#         answer_candi = []
+#         removed_none_candi = []
+#         answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
+#         '''gene_exps: 长度为 7 的 list, 每个元素形如 (JOIN (R people.person.profession) (AND (JOIN (R government.politician.government_positions_held) james k polk) (JOIN (R government.government_position_held.title) president)))'''
+#         scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
+#         em_in_scouts = [] # 该问题，所有 draft 的 em
+#         for idx, gene_exp in enumerate(scouts):
+#             try:
+#                 logger.info("gene_exp: {}".format(gene_exp))
+#                 join_num = number_of_join(gene_exp)
+#                 if join_num > 5:
+#                     continue
+#                 if join_num > 3:
+#                     top_mid = 5
+#                 else:
+#                     top_mid = 15
+#                 found_names = find_friend_name(gene_exp, data["question"])
+#                 found_mids = from_fn_to_id_set(found_names, data["question"], name_to_id_dict, bm25_all_fns, all_fns)
+#                 found_mids = [mids[:top_mid] for mids in found_mids]
+#                 mid_combinations = list(itertools.product(*found_mids)) # gene_exp 中实体 label 所对应实体 mid 的组合
+#                 for mid_iters in mid_combinations:
+#                     # 尝试每一种实体的 mid 组合，（看看能否产生可执行的 S-expression）
+#                     replaced_exp = convz_fn_to_mids(gene_exp, found_names, mid_iters)
+
+#                     answer, two_hop_rela_dict, bounded_exp = bound_to_existed(data["question"], replaced_exp, mid_iters,
+#                                                                               two_hop_rela_dict, relationship_to_enti,
+#                                                                               hsearcher, rela_corpus, relationships)
+#                     answer_candi.append(answer)
+#                     if answer is not None:
+#                         answer_to_grounded_dict[tuple(answer)].append(bounded_exp)
+#                 for ans in answer_candi:
+#                     if ans != None:
+#                         removed_none_candi.append(ans)
+#                 if not removed_none_candi:
+#                     answer = None
+#                 else:
+#                     count_dict = Counter([tuple(candi) for candi in removed_none_candi])
+#                     # logger.info("count_dict: {}".format(count_dict))
+#                     answer = max(count_dict, key=count_dict.get) # 这个 gene_exp 的 Majority Voting 结果
+#             except: # 这个 draft 出错了，还是可以根据之前 draft 的结果，给个答案
+#                 if not removed_none_candi:
+#                     answer = None
+#                 else:
+#                     count_dict = Counter([tuple(candi) for candi in removed_none_candi])
+#                     # logger.info("count_dict: {}".format(count_dict))
+#                     answer = max(count_dict, key=count_dict.get)
+#             answer_to_grounded_dict[None] = list()
+#             logger.info("predicted_answer: {}".format(answer)) # 这个 gene_exp 导出的所有可执行 S-expression 的 Majority Voting 结果
+#             logger.info("label: {}".format(label))
+#             if answer is None:
+#                 no_ans[idx] += 1
+#             elif set(answer) == set(label):
+#                 correct[idx] += 1
+#             total[idx] += 1
+#             em_score = correct[idx] / total[idx]
+
+#             em_in_scouts.append(em_score) # 该 draft 对应所有 executable 的 EM
+
+#             logger.info("================================================================")
+#             logger.info("consistent candidates number: {}".format(idx+1))
+#             logger.info("em_score: {}".format(em_score))
+#             logger.info("correct: {}".format(correct[idx]))
+#             logger.info("total: {}".format(total[idx]))
+#             logger.info("no_ans: {}".format(no_ans[idx]))
+#             logger.info(" ")
+#             logger.info("================================================================")
+
+#         logger.info("\n\n")
+#         logger.info(f"final answer after consistency check: {answer}")
+#         end_time = time.time()
+#         exec_time_list.append(end_time - st_time)
+#         predicted_answer_list.append(answer)
+#         executable_lf_list.append(copy.deepcopy(answer_to_grounded_dict[answer]))
+
+#     results = list()
+#     for (data, gold_answer, predicted_answer, executable_lf, exec_time) in zip(
+#         data_batch, gold_answer_list, predicted_answer_list, executable_lf_list, exec_time_list
+#     ):
+#         results.append({
+#             "qid": data["id"],
+#             "gold_answer": tuple(gold_answer),
+#             "predicted_answer": tuple(predicted_answer) if (predicted_answer is not None) else None,
+#             "executable_lf": executable_lf,
+#             "exection_time": exec_time
+#         })
+#     dump_json(results, os.path.join(output_dir, "results.json"))
+
 def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_compose, selected_quest,
                             prompt_type, hsearcher, rela_corpus, relationships, temp, que_to_s_dict_train,
                             question_to_mid_dict, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
                             relationship_to_enti, retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None,
-                            retrieve_number=100, output_dir=None):
+                            retrieve_number=100, output_dir=None, timeout_limit=600):
     correct = [0] * 6
     total = [0] * 6
     no_ans = [0] * 6
@@ -474,114 +610,22 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
     exec_time_list = [] # 每个问题运行时间
     for data_index, data in enumerate(data_batch):
         st_time = time.time()
-        logger.info("==========")
-        logger.info("data[id]: {}".format(data["id"]))
-        logger.info("data[question]: {}".format(data["question"]))
-        logger.info("data[exp]: {}".format(data["s_expression"]))
-        label = []
-        for ans in data["answer"]: # gold answer
-            label.append(ans["answer_argument"])
-        gold_answer_list.append(copy.deepcopy(label))
-        
-        if not retrieval:
-            gene_type = type_generator(data["question"], prompt_type, LLM_engine)
-            logger.info("gene_type: {}".format(gene_type))
-        else:
-            gene_type = None
-
-        '''ChatGPT 调用处，每个样本调用 7 次 chatGPT'''
-        if gene_type == "Comparison":
-            gene_exps = ep_generator(data["question"],
-                                     list(set(selected_quest_compare) | set(selected_quest)),
-                                     temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
-                                     retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
-                                     bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
-        else:
-            gene_exps = ep_generator(data["question"],
-                                     list(set(selected_quest_compose) | set(selected_quest)),
-                                     temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
-                                     retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
-                                     bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
-        two_hop_rela_dict = {}
-        '''
-        注意，这几个结构定义在 draft 的遍历之上
-        可以认为完成所有 draft 的遍历之后，这边记录的是所有 draft 的结果总和
-        包括最后一个 draft 的遍历结束之后， Majority voting 的结果也是所有 draft 的 majority voting 结果
-        TODO: 通过 debug 验证
-        '''
-        answer_candi = []
-        removed_none_candi = []
-        answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
-        '''gene_exps: 长度为 7 的 list, 每个元素形如 (JOIN (R people.person.profession) (AND (JOIN (R government.politician.government_positions_held) james k polk) (JOIN (R government.government_position_held.title) president)))'''
-        scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
-        em_in_scouts = [] # 该问题，所有 draft 的 em
-        for idx, gene_exp in enumerate(scouts):
-            try:
-                logger.info("gene_exp: {}".format(gene_exp))
-                join_num = number_of_join(gene_exp)
-                if join_num > 5:
-                    continue
-                if join_num > 3:
-                    top_mid = 5
-                else:
-                    top_mid = 15
-                found_names = find_friend_name(gene_exp, data["question"])
-                found_mids = from_fn_to_id_set(found_names, data["question"], name_to_id_dict, bm25_all_fns, all_fns)
-                found_mids = [mids[:top_mid] for mids in found_mids]
-                mid_combinations = list(itertools.product(*found_mids)) # gene_exp 中实体 label 所对应实体 mid 的组合
-                for mid_iters in mid_combinations:
-                    # 尝试每一种实体的 mid 组合，（看看能否产生可执行的 S-expression）
-                    replaced_exp = convz_fn_to_mids(gene_exp, found_names, mid_iters)
-
-                    answer, two_hop_rela_dict, bounded_exp = bound_to_existed(data["question"], replaced_exp, mid_iters,
-                                                                              two_hop_rela_dict, relationship_to_enti,
-                                                                              hsearcher, rela_corpus, relationships)
-                    answer_candi.append(answer)
-                    if answer is not None:
-                        answer_to_grounded_dict[tuple(answer)].append(bounded_exp)
-                for ans in answer_candi:
-                    if ans != None:
-                        removed_none_candi.append(ans)
-                if not removed_none_candi:
-                    answer = None
-                else:
-                    count_dict = Counter([tuple(candi) for candi in removed_none_candi])
-                    # logger.info("count_dict: {}".format(count_dict))
-                    answer = max(count_dict, key=count_dict.get) # 这个 gene_exp 的 Majority Voting 结果
-            except: # 这个 draft 出错了，还是可以根据之前 draft 的结果，给个答案
-                if not removed_none_candi:
-                    answer = None
-                else:
-                    count_dict = Counter([tuple(candi) for candi in removed_none_candi])
-                    # logger.info("count_dict: {}".format(count_dict))
-                    answer = max(count_dict, key=count_dict.get)
-            answer_to_grounded_dict[None] = list()
-            logger.info("predicted_answer: {}".format(answer)) # 这个 gene_exp 导出的所有可执行 S-expression 的 Majority Voting 结果
-            logger.info("label: {}".format(label))
-            if answer is None:
-                no_ans[idx] += 1
-            elif set(answer) == set(label):
-                correct[idx] += 1
-            total[idx] += 1
-            em_score = correct[idx] / total[idx]
-
-            em_in_scouts.append(em_score) # 该 draft 对应所有 executable 的 EM
-
-            logger.info("================================================================")
-            logger.info("consistent candidates number: {}".format(idx+1))
-            logger.info("em_score: {}".format(em_score))
-            logger.info("correct: {}".format(correct[idx]))
-            logger.info("total: {}".format(total[idx]))
-            logger.info("no_ans: {}".format(no_ans[idx]))
-            logger.info(" ")
-            logger.info("================================================================")
-
+        answer, answer_to_grounded_dict = process_one_example(
+            data, retrieval, prompt_type, LLM_engine, selected_quest_compare, selected_quest, temp,
+            que_to_s_dict_train, question_to_mid_dict, corpus, nlp_model, bm25_train_full, retrieve_number,
+            selected_quest_compose, name_to_id_dict, bm25_all_fns, all_fns, relationship_to_enti, hsearcher, rela_corpus, relationships,
+            timeout_limit,
+            gold_answer_list, no_ans, correct, total
+        )
         logger.info("\n\n")
         logger.info(f"final answer after consistency check: {answer}")
         end_time = time.time()
         exec_time_list.append(end_time - st_time)
         predicted_answer_list.append(answer)
         executable_lf_list.append(copy.deepcopy(answer_to_grounded_dict[answer]))
+        logger.info(f"gold_answer_list: {len(gold_answer_list)}")
+        logger.info(f"answer: {answer}")
+        logger.info(f"answer_to_grounded_dict: {answer_to_grounded_dict}")
 
     results = list()
     for (data, gold_answer, predicted_answer, executable_lf, exec_time) in zip(
@@ -597,12 +641,13 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
     dump_json(results, os.path.join(output_dir, "results.json"))
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--shot_num', type=int, metavar='N',
                         default=40, help='the number of shots used in in-context demo')
+    parser.add_argument('--timeout_limit', type=int, metavar='N',
+                        default=600, help='Skip an example after this time')
     parser.add_argument('--temperature', type=float, metavar='N',
                         default=0.3, help='the temperature of LLM')
     parser.add_argument('--api_key_list_file', type=str, metavar='N',
@@ -638,6 +683,7 @@ def main():
         logger = setup_custom_logger(
             os.path.join(output_dir, "log.txt")
         )
+    logger.info(f"timeout: {args.timeout_limit}")
     nlp = spacy.load("en_core_web_sm")
     bm25_searcher = LuceneSearcher('contriever_fb_relation/index_relation_fb')
     query_encoder = AutoQueryEncoder(encoder_dir='facebook/contriever', pooling='mean')
@@ -709,7 +755,133 @@ def main():
                             hsearcher, rela_corpus, relationships, args.temperature, que_to_s_dict_train,
                             question_to_mid_dict, args.engine, name_to_id_dict, bm25_all_fns,
                             all_fns, relationship_to_enti, retrieval=args.retrieval, corpus=corpus, nlp_model=nlp,
-                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num, output_dir=output_dir)
+                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num, output_dir=output_dir, timeout_limit=args.timeout_limit)
+
+def process_one_example(
+    data, retrieval, prompt_type, LLM_engine, selected_quest_compare, selected_quest, temp,
+    que_to_s_dict_train, question_to_mid_dict, corpus, nlp_model, bm25_train_full, retrieve_number,
+    selected_quest_compose, name_to_id_dict, bm25_all_fns, all_fns, relationship_to_enti, hsearcher, rela_corpus, relationships,
+    timeout_limit,
+    gold_answer_list, no_ans, correct, total # 最后一行传入的都是引用
+):
+    st_time = time.time()
+    logger.info("==========")
+    logger.info("data[id]: {}".format(data["id"]))
+    logger.info("data[question]: {}".format(data["question"]))
+    logger.info("data[exp]: {}".format(data["s_expression"]))
+    label = []
+    for ans in data["answer"]: # gold answer
+        label.append(ans["answer_argument"])
+    gold_answer_list.append(copy.deepcopy(label)) # gold_answer_list 传进来的是一个引用
+    
+    if not retrieval:
+        gene_type = type_generator(data["question"], prompt_type, LLM_engine)
+        logger.info("gene_type: {}".format(gene_type))
+    else:
+        gene_type = None
+
+    '''ChatGPT 调用处，每个样本调用 7 次 chatGPT'''
+    if gene_type == "Comparison":
+        gene_exps = ep_generator(data["question"],
+                                    list(set(selected_quest_compare) | set(selected_quest)),
+                                    temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
+                                    retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
+                                    bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
+    else:
+        gene_exps = ep_generator(data["question"],
+                                    list(set(selected_quest_compose) | set(selected_quest)),
+                                    temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
+                                    retrieval=retrieval, corpus=corpus, nlp_model=nlp_model,
+                                    bm25_train_full=bm25_train_full, retrieve_number=retrieve_number)
+    two_hop_rela_dict = {}
+    '''
+    注意，这几个结构定义在 draft 的遍历之上
+    可以认为完成所有 draft 的遍历之后，这边记录的是所有 draft 的结果总和
+    包括最后一个 draft 的遍历结束之后， Majority voting 的结果也是所有 draft 的 majority voting 结果
+    TODO: 通过 debug 验证
+    '''
+    answer_candi = []
+    removed_none_candi = []
+    answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
+    '''gene_exps: 长度为 7 的 list, 每个元素形如 (JOIN (R people.person.profession) (AND (JOIN (R government.politician.government_positions_held) james k polk) (JOIN (R government.government_position_held.title) president)))'''
+    scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
+    em_in_scouts = [] # 该问题，所有 draft 的 em
+    for idx, gene_exp in enumerate(scouts):
+        try:
+            logger.info("gene_exp: {}".format(gene_exp))
+            if time.time() - st_time > timeout_limit:
+                return answer, answer_to_grounded_dict # answer, answer_to_grounded_dict
+            join_num = number_of_join(gene_exp)
+            if join_num > 5:
+                continue
+            if join_num > 3:
+                top_mid = 5
+            else:
+                top_mid = 15
+            found_names = find_friend_name(gene_exp, data["question"])
+            found_mids = from_fn_to_id_set(found_names, data["question"], name_to_id_dict, bm25_all_fns, all_fns)
+            found_mids = [mids[:top_mid] for mids in found_mids]
+            mid_combinations = list(itertools.product(*found_mids)) # gene_exp 中实体 label 所对应实体 mid 的组合
+            for mid_iters in tqdm(mid_combinations, desc="enumerating mid_combinations"):
+                if time.time() - st_time > timeout_limit:
+                    for ans in answer_candi:
+                        if ans != None:
+                            removed_none_candi.append(ans)
+                    if not removed_none_candi:
+                        answer = None
+                    else:
+                        count_dict = Counter([tuple(candi) for candi in removed_none_candi])
+                        # logger.info("count_dict: {}".format(count_dict))
+                        answer = max(count_dict, key=count_dict.get)
+                    return answer, answer_to_grounded_dict # answer, answer_to_grounded_dict
+                # 尝试每一种实体的 mid 组合，（看看能否产生可执行的 S-expression）
+                replaced_exp = convz_fn_to_mids(gene_exp, found_names, mid_iters)
+
+                answer, two_hop_rela_dict, bounded_exp = bound_to_existed(data["question"], replaced_exp, mid_iters,
+                                                                            two_hop_rela_dict, relationship_to_enti,
+                                                                            hsearcher, rela_corpus, relationships)
+                answer_candi.append(answer)
+                if answer is not None:
+                    answer_to_grounded_dict[tuple(answer)].append(bounded_exp)
+            for ans in answer_candi:
+                if ans != None:
+                    removed_none_candi.append(ans)
+            if not removed_none_candi:
+                answer = None
+            else:
+                count_dict = Counter([tuple(candi) for candi in removed_none_candi])
+                # logger.info("count_dict: {}".format(count_dict))
+                answer = max(count_dict, key=count_dict.get) # 这个 gene_exp 的 Majority Voting 结果
+        except: # 这个 draft 出错了，还是可以根据之前 draft 的结果，给个答案
+            if not removed_none_candi:
+                answer = None
+            else:
+                count_dict = Counter([tuple(candi) for candi in removed_none_candi])
+                # logger.info("count_dict: {}".format(count_dict))
+                answer = max(count_dict, key=count_dict.get)
+        answer_to_grounded_dict[None] = list()
+        logger.info("predicted_answer: {}".format(answer)) # 这个 gene_exp 导出的所有可执行 S-expression 的 Majority Voting 结果
+        logger.info("label: {}".format(label))
+        if answer is None:
+            no_ans[idx] += 1
+        elif set(answer) == set(label):
+            correct[idx] += 1
+        total[idx] += 1
+        em_score = correct[idx] / total[idx]
+
+        em_in_scouts.append(em_score) # 该 draft 对应所有 executable 的 EM
+
+        logger.info("================================================================")
+        logger.info("consistent candidates number: {}".format(idx+1))
+        logger.info("em_score: {}".format(em_score))
+        logger.info("correct: {}".format(correct[idx]))
+        logger.info("total: {}".format(total[idx]))
+        logger.info("no_ans: {}".format(no_ans[idx]))
+        logger.info(" ")
+        logger.info("================================================================")
+
+    return answer, answer_to_grounded_dict # answer, answer_to_grounded_dict
+
 
 if __name__=="__main__":
     main()
