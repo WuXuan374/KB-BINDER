@@ -600,7 +600,7 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
                             prompt_type, hsearcher, rela_corpus, relationships, temp, que_to_s_dict_train,
                             question_to_mid_dict, LLM_engine, name_to_id_dict, bm25_all_fns, all_fns,
                             relationship_to_enti, retrieval=False, corpus=None, nlp_model=None, bm25_train_full=None,
-                            retrieve_number=100, output_dir=None, timeout_limit=600):
+                            retrieve_number=100, output_dir=None, timeout_limit=600, checkpoint_size=50):
     correct = [0] * 6
     total = [0] * 6
     no_ans = [0] * 6
@@ -627,6 +627,26 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
         logger.info(f"answer: {answer}")
         logger.info(f"answer_to_grounded_dict: {answer_to_grounded_dict}")
 
+        if (data_index + 1) % checkpoint_size == 0:
+            tmp_dir = os.path.join(output_dir, "_tmp", "")
+            os.makedirs(tmp_dir, exist_ok=True)
+            start_idx = data_index + 1 - checkpoint_size
+            end_idx = data_index + 1
+            checkpoint_result = list()
+            for (data, gold_answer, predicted_answer, executable_lf, exec_time) in zip(
+                data_batch[start_idx:end_idx], gold_answer_list[start_idx:end_idx], predicted_answer_list[start_idx:end_idx], executable_lf_list[start_idx:end_idx], exec_time_list[start_idx:end_idx]
+            ):
+                checkpoint_result.append({
+                    "qid": data["id"],
+                    "gold_answer": tuple(gold_answer),
+                    "predicted_answer": tuple(predicted_answer) if (predicted_answer is not None) else None,
+                    "executable_lf": executable_lf,
+                    "exection_time": exec_time
+                })
+            dump_json(checkpoint_result, os.path.join(
+                tmp_dir, f"{int(data_index / checkpoint_size)}.json"
+            ))
+
     results = list()
     for (data, gold_answer, predicted_answer, executable_lf, exec_time) in zip(
         data_batch, gold_answer_list, predicted_answer_list, executable_lf_list, exec_time_list
@@ -648,6 +668,8 @@ def parse_args():
                         default=40, help='the number of shots used in in-context demo')
     parser.add_argument('--timeout_limit', type=int, metavar='N',
                         default=600, help='Skip an example after this time')
+    parser.add_argument('--checkpoint_size', type=int, metavar='N',
+                        default=50, help='Save current result every checkpoint steps')
     parser.add_argument('--temperature', type=float, metavar='N',
                         default=0.3, help='the temperature of LLM')
     parser.add_argument('--api_key_list_file', type=str, metavar='N',
@@ -755,7 +777,7 @@ def main():
                             hsearcher, rela_corpus, relationships, args.temperature, que_to_s_dict_train,
                             question_to_mid_dict, args.engine, name_to_id_dict, bm25_all_fns,
                             all_fns, relationship_to_enti, retrieval=args.retrieval, corpus=corpus, nlp_model=nlp,
-                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num, output_dir=output_dir, timeout_limit=args.timeout_limit)
+                            bm25_train_full=bm25_train_full, retrieve_number=args.shot_num, output_dir=output_dir, timeout_limit=args.timeout_limit, checkpoint_size=args.checkpoint_size)
 
 def process_one_example(
     data, retrieval, prompt_type, LLM_engine, selected_quest_compare, selected_quest, temp,

@@ -32,8 +32,8 @@ def get_grailqa_subset():
     dump_json(selected_examples, 'data/grailqa_v1.0_dev.1000.json')
 
 def get_cwq_subset():
-    original_data = load_json('data/cwq_test_0_200_linking.json')
-    # original_data = load_json('data/cwq_train_linking.json')
+    # original_data = load_json('data/subset/cwq_test_0_1000_linking.json')
+    original_data = load_json('data/subset/cwq_train_linking.json')
     new_data = list()
     for item in original_data:
         nodes = list()
@@ -66,10 +66,10 @@ def get_cwq_subset():
                 "topic_entity": 'null',
                 "topic_entity_name": 'null' # 保证代码能运行，同时不造成什么影响
             })
-    dump_json(new_data, 'data/cwq.test.200.json')
-    # dump_json(new_data, 'data/cwq.train.json')
+    # dump_json(new_data, 'data/cwq.test.1000.json')
+    dump_json(new_data, 'data/cwq.train.json')
 
 if __name__=='__main__':
     # get_webqsp_subset()
-    get_grailqa_subset()
-    # get_cwq_subset()
+    # get_grailqa_subset()
+    get_cwq_subset()

@@ -53,7 +53,7 @@ answer_to_grounded_dict[answer] 我们均视为 KB-BINDER 的输出
 python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
  --api_key_list_file api_keys/exclusive/openai_keys_2.json --engine gpt-3.5-turbo \
  --train_data_path data/webqsp_0107.train.json --eva_data_path data/webqsp_0107.test.1000.json \
- --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
 ## KB-BINDER (6) GrailQA 1000
 论文中说是 40 shot
@@ -61,7 +61,7 @@ python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
  --api_key_list_file api_keys/exclusive/openai_keys_1.json --engine gpt-3.5-turbo \
  --train_data_path data/grailqa_v1.0_train.json --eva_data_path data/grailqa_v1.0_dev.1000.json \
- --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
 
 ## KB-BINDER (6) CWQ 200
@@ -72,6 +72,6 @@ CWQ 有几点需要注意
 ```
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
  --api_key_list_file api_keys/exclusive/openai_keys_3.json --engine gpt-3.5-turbo \
- --train_data_path data/cwq.train.json  --eva_data_path data/cwq.test.200.json \
- --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention
+ --train_data_path data/cwq.train.json  --eva_data_path data/cwq.test.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
