@@ -17,23 +17,22 @@ def dump_json(obj, fname, indent=4, mode='w' ,encoding="utf8", ensure_ascii=Fals
 
 def get_webqsp_subset():
     original_data = load_json('data/webqsp_0107.test.json')
-    subset_data = load_json('data/subset/webqsp_test_0_1000_linking.json')
+    subset_data = load_json('data/paper/subset/webqsp_test_0_1000_linking.json')
     qid_list = [item['qid'] for item in subset_data]
     selected_examples = [item for item in original_data if item["qid"] in qid_list]
     assert len(selected_examples) == len(subset_data)
-    dump_json(selected_examples, 'data/webqsp_0107.test.1000.json')
+    dump_json(selected_examples, 'data/paper/webqsp_0107.test.1000.json')
 
 def get_grailqa_subset():
     original_data = load_json('data/grailqa_v1.0_dev.json')
-    subset_data = load_json('data/subset/grailqa_v1.0_dev_0_1000_linking.json')
+    subset_data = load_json('data/paper/subset/grailqa_v1.0_dev_0_1000_linking.json')
     qid_list = [item['qid'] for item in subset_data]
     selected_examples = [item for item in original_data if item["qid"] in qid_list]
     assert len(selected_examples) == len(subset_data)
-    dump_json(selected_examples, 'data/grailqa_v1.0_dev.1000.json')
+    dump_json(selected_examples, 'data/paper/grailqa_v1.0_dev.1000.json')
 
 def get_cwq_subset():
-    # original_data = load_json('data/subset/cwq_test_0_1000_linking.json')
-    original_data = load_json('data/subset/cwq_train_linking.json')
+    original_data = load_json('data/paper/subset/cwq_test_0_1000_linking.json')
     new_data = list()
     for item in original_data:
         nodes = list()
@@ -66,10 +65,9 @@ def get_cwq_subset():
                 "topic_entity": 'null',
                 "topic_entity_name": 'null' # 保证代码能运行，同时不造成什么影响
             })
-    # dump_json(new_data, 'data/cwq.test.1000.json')
-    dump_json(new_data, 'data/cwq.train.json')
+    dump_json(new_data, 'data/paper/cwq.test.1000.json')
 
 if __name__=='__main__':
     # get_webqsp_subset()
-    # get_grailqa_subset()
-    get_cwq_subset()
+    get_grailqa_subset()
+    # get_cwq_subset()

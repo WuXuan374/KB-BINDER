@@ -1,5 +1,6 @@
 # 环境
-- SPARQL url: README 中要求使用 DKILAB 的端口
+- SPARQL url: README 中要求使用 DKILAB 的端口 
+    - 由于 SPARQL 端口的负载，投稿论文中，对于 CWQ 和 WebQSP 使用 official 端口，GrailQA 使用 DKILAB 端口
 - conda 环境: 
     - 新建一个 Python 3.10 的环境
     - 参考 https://github.com/castorini/pyserini/blob/master/docs/installation.md, 安装 pyserini 相关
