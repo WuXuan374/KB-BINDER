@@ -5,8 +5,8 @@ import urllib
 from pathlib import Path
 from tqdm import tqdm
 
-sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP 和 GrailQA
-# sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ
+# sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP 和 GrailQA
+sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ
 sparql.setReturnFormat(JSON)
 
 path = str(Path(__file__).parent.absolute())
@@ -300,7 +300,7 @@ def execute_query(query: str, logger) -> List[str]:
 
     return rtn
 
-
+'''未被使用'''
 def execute_unary(type: str) -> List[str]:
     query = ("""
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -327,7 +327,7 @@ def execute_unary(type: str) -> List[str]:
 
     return rtn
 
-
+'''未被使用'''
 def execute_binary(relation: str) -> List[Tuple[str, str]]:
     query = ("""
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -390,7 +390,7 @@ def get_types(entity: str, logger) -> List[str]:
 
     return rtn
 
-
+'''未被使用'''
 def get_notable_type(entity: str):
     query = ("""
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -420,7 +420,7 @@ def get_notable_type(entity: str):
 
     return rtn
 
-
+'''未被使用'''
 def get_friendly_name(entity: str) -> str:
     query = ("""
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -475,7 +475,7 @@ def get_friendly_name(entity: str) -> str:
 
     return rtn[0]
 
-
+'''未被使用'''
 def get_degree(entity: str):
     degree = 0
 
@@ -522,7 +522,7 @@ def get_degree(entity: str):
 
     return degree
 
-
+'''未被使用'''
 def get_in_attributes(value: str):
     in_attributes = set()
 
@@ -552,7 +552,7 @@ def get_in_attributes(value: str):
 
     return in_attributes
 
-
+'''未被使用'''
 def get_in_relations(entity: str):
     in_relations = set()
 
@@ -582,7 +582,7 @@ def get_in_relations(entity: str):
 
     return in_relations
 
-
+'''未被使用'''
 def get_in_entities(entity: str, relation: str):
     neighbors = set()
 
@@ -612,7 +612,7 @@ def get_in_entities(entity: str, relation: str):
 
     return neighbors
 
-
+'''未被使用'''
 def get_in_entities_for_literal(value: str, relation: str):
     neighbors = set()
 
@@ -642,7 +642,7 @@ def get_in_entities_for_literal(value: str, relation: str):
 
     return neighbors
 
-
+'''未被使用'''
 def get_out_relations(entity: str):
     out_relations = set()
 
@@ -672,7 +672,7 @@ def get_out_relations(entity: str):
 
     return out_relations
 
-
+'''未被使用'''
 def get_out_entities(entity: str, relation: str):
     neighbors = set()
 
@@ -702,7 +702,7 @@ def get_out_entities(entity: str, relation: str):
 
     return neighbors
 
-
+'''未被使用'''
 def get_entities_cmp(value, relation: str, cmp: str):
     neighbors = set()
 
@@ -735,7 +735,7 @@ def get_entities_cmp(value, relation: str, cmp: str):
 
     return neighbors
 
-
+'''未被使用'''
 def get_adjacent_relations(entity: str):
     in_relations = set()
     out_relations = set()
@@ -788,7 +788,7 @@ def get_adjacent_relations(entity: str):
 
     return in_relations, out_relations
 
-
+'''未被使用'''
 def get_2hop_relations_from_2entities(entity0: str, entity1: str):  # m.027lnzs  m.0zd6  3200017000000
     query = ("""
             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -805,7 +805,7 @@ def get_2hop_relations_from_2entities(entity0: str, entity1: str):  # m.027lnzs 
     # print(query)
     pass
 
-
+'''未被使用'''
 def get_2hop_relations(entity: str, logger):
     in_relations = set()
     out_relations = set()
@@ -866,11 +866,18 @@ def get_2hop_relations(entity: str, logger):
                   """)
 
     sparql.setQuery(query2)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query2)
-        exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query2}: err: {err}")
+    
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
         r0 = result['r0']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -895,11 +902,18 @@ def get_2hop_relations(entity: str, logger):
                   """)
 
     sparql.setQuery(query3)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query3)
-        exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query3}: err: {err}")
+
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
         r0 = result['r0']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -924,11 +938,18 @@ def get_2hop_relations(entity: str, logger):
                   """)
 
     sparql.setQuery(query4)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query4)
-        exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query4}: err: {err}")
+
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
         r0 = result['r0']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -940,7 +961,7 @@ def get_2hop_relations(entity: str, logger):
 
     return in_relations, out_relations, paths
 
-
+'''未被使用'''
 def get_label(entity: str) -> str:
     query = ("""
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>

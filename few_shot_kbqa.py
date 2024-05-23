@@ -1,6 +1,7 @@
 import openai
 import json
 import spacy
+import tiktoken
 from sparql_exe import execute_query, get_types, get_2hop_relations, lisp_to_sparql
 from utils import process_file, process_file_node, process_file_rela, process_file_test
 from rank_bm25 import BM25Okapi
@@ -45,17 +46,15 @@ def setup_custom_logger(log_file_name):
 
     return logger
 
-api_key_list = list()
+# api_key_list = list()
 api_call_count = 0
 logger = None
 
 def get_api_key():
-    global api_key_list, api_call_count
-    current_api_key = api_key_list.pop(0)
-    api_key_list.append(current_api_key)
+    global api_call_count
     api_call_count += 1
     logger.info(f"api_call_count: {api_call_count}")
-    return current_api_key
+    return "sk-ROoV4l0NELy39vGl45Fe5bDc7a954224A717BeFe4eCf10Ba"
 
 def load_json(fname, mode="r", encoding="utf8"):
     if "b" in mode:
@@ -117,10 +116,12 @@ def type_generator(question, prompt_type, LLM_engine):
     sleep(1)
     prompt = prompt_type
     prompt = prompt + " Question: " + question + "Type of the question: "
-    got_result = False
-    while got_result != True:
+    logger.info(f"prompt length: {num_tokens_from_string(prompt)}")
+    
+    for idx in range(2):
         try:
             openai.api_key = get_api_key()
+            openai.api_base = "https://threefive.gpt7.link/v1"
             answer_modi = openai.ChatCompletion.create(
                 model=LLM_engine,
                 messages=[{'role': 'user', 'content': prompt}],
@@ -131,12 +132,18 @@ def type_generator(question, prompt_type, LLM_engine):
                 presence_penalty=0,
                 stop=["Question: "]
             )
-            got_result = True
+            break
         except Exception as e:
-            logger.info(f"type_generator() exception: {e}")
+            logger.info(f"type_generator() exception: {e}; retrying idx: {idx}")
             sleep(3)
     gene_exp = answer_modi["choices"][0]['message']['content'].strip()
     return gene_exp
+
+def num_tokens_from_string(string: str, model_name: str = "gpt-3.5-turbo") -> int:
+    """Returns the number of tokens in a text string."""
+    encoding = tiktoken.encoding_for_model(model_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
 
 
 def ep_generator(question, selected_examples, temp, que_to_s_dict_train, question_to_mid_dict, LLM_engine,
@@ -156,10 +163,12 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
             continue
         prompt = prompt + "Question: " + que + "\n" + "Logical Form: " + sub_mid_to_fn(que, que_to_s_dict_train[que], question_to_mid_dict) + "\n"
     prompt = prompt + "Question: " + question + "\n" + "Logical Form: "
-    got_result = False
-    while got_result != True:
+
+    logger.info(f"prompt length: {num_tokens_from_string(prompt)}")
+    for idx in range(2):
         try:
             openai.api_key = get_api_key()
+            openai.api_base = "https://threefive.gpt7.link/v1"
             answer_modi = openai.ChatCompletion.create(
                 model=LLM_engine,
                 messages=[{'role': 'user', 'content': prompt}],
@@ -171,9 +180,9 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
                 stop=["Question: "],
                 n=7 # 默认对于一个问题给出 7 个回答
             )
-            got_result = True
+            break
         except Exception as e:
-            logger.error(f"ep_generator exception: {e}")
+            logger.error(f"ep_generator exception: {e}; retrying idx: {idx}")
             sleep(3)
     gene_exp = [exp['message']['content'].strip() for exp in answer_modi["choices"]] # TODO: 这里是不是把 KB-Binder(6) 写死了
     return gene_exp # 有时候，chatGPT 返回的多个结果是一致的
@@ -692,8 +701,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    global api_key_list
-    api_key_list = load_json(args.api_key_list_file)
+    # global api_key_list
+    # api_key_list = load_json(args.api_key_list_file)
     global logger
     if args.do_debug == "true":
         output_dir = None

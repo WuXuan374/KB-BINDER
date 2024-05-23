@@ -79,3 +79,27 @@ python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
  --train_data_path data/cwq.train.json  --eva_data_path data/cwq.test.1000.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
+
+# 投稿论文代码执行
+Follow GrailQA 的设置，40 shot
+
+## CWQ
+CWQ 有几点需要注意
+- topic_entity 和 topic_entity_name
+
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+## debug
+
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+ --do_debug true (这个参数好像没生效？)
+```
