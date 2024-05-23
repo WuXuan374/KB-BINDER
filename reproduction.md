@@ -29,6 +29,8 @@ conda activate /home4/xwu/.conda/envs/kb-binder
 - process_one_example()
     - 把每个数据集样本的 QA 过程放在这个函数里
     - 目的是可以检查是否超时；作为一个函数，超时的时候直接 return 即可（Python 没有 goto）
+- sparql_exe.py
+    - SPARQL 查询增加失败重试机制
 # 关键点（坑）记录
 - 生成的 S-expression 是旧版格式的, 我们计算等价时做好适配
 - 不确定 openai 版本是啥，可能会报错
@@ -47,11 +49,12 @@ answer_to_grounded_dict[answer] 我们均视为 KB-BINDER 的输出
 - 其次在评价的时候，对于所有可执行 Sexp, 我们取评价最好的那个？
 
 # 代码执行
+- 执行之前检查一下 SPARQL 端口!
 ## KB-BINDER (6) WebQSP 1000
-论文中说是 100 shot
+论文中说是 100 shot; 和论文一致，使用 DKILAB 端口
 ```
 python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
- --api_key_list_file api_keys/exclusive/openai_keys_2.json --engine gpt-3.5-turbo \
+ --api_key_list_file api_keys/exclusive/openai_keys_0.json --engine gpt-3.5-turbo \
  --train_data_path data/webqsp_0107.train.json --eva_data_path data/webqsp_0107.test.1000.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
@@ -64,14 +67,14 @@ python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
 
-## KB-BINDER (6) CWQ 200
+## KB-BINDER (6) CWQ 1000
 Follow GrailQA 的设置，40 shot
 CWQ 有几点需要注意
 - topic_entity 和 topic_entity_name
 
 ```
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
- --api_key_list_file api_keys/exclusive/openai_keys_3.json --engine gpt-3.5-turbo \
+ --api_key_list_file api_keys/exclusive/openai_keys_0.json --engine gpt-3.5-turbo \
  --train_data_path data/cwq.train.json  --eva_data_path data/cwq.test.1000.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```

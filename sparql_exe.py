@@ -5,7 +5,8 @@ import urllib
 from pathlib import Path
 from tqdm import tqdm
 
-sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql")
+sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP 和 GrailQA
+# sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ
 sparql.setReturnFormat(JSON)
 
 path = str(Path(__file__).parent.absolute())
@@ -277,14 +278,20 @@ def lisp_to_sparql(lisp_program: str):
 
 
 
-def execute_query(query: str) -> List[str]:
+def execute_query(query: str, logger) -> List[str]:
     # print("http://129.97.152.19:3001/sparql")
     sparql.setQuery(query)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query)
-        exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query}: err: {err}")
     rtn = []
     for result in results['results']['bindings']:
         assert len(result) == 1  # only select one variable
@@ -346,7 +353,7 @@ def execute_binary(relation: str) -> List[Tuple[str, str]]:
     return rtn
 
 
-def get_types(entity: str) -> List[str]:
+def get_types(entity: str, logger) -> List[str]:
     query = ("""
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -361,11 +368,22 @@ def get_types(entity: str) -> List[str]:
     """)
     # print(query)
     sparql.setQuery(query)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query)
-        exit(0)
+    # try:
+    #     results = sparql.query().convert()
+    # except urllib.error.URLError:
+    #     print(query)
+    #     exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query}: err: {err}")
     rtn = []
     for result in results['results']['bindings']:
         rtn.append(result['value']['value'].replace('http://rdf.freebase.com/ns/', ''))
@@ -788,7 +806,7 @@ def get_2hop_relations_from_2entities(entity0: str, entity1: str):  # m.027lnzs 
     pass
 
 
-def get_2hop_relations(entity: str):
+def get_2hop_relations(entity: str, logger):
     in_relations = set()
     out_relations = set()
     paths = []
@@ -808,11 +826,22 @@ def get_2hop_relations(entity: str):
                   """)
 
     sparql.setQuery(query1)
-    try:
-        results = sparql.query().convert()
-    except urllib.error.URLError:
-        print(query1)
-        exit(0)
+    # try:
+    #     results = sparql.query().convert()
+    # except urllib.error.URLError:
+    #     print(query1)
+    #     exit(0)
+    results = {
+        "results": {
+            "bindings": list()
+        }
+    }
+    for idx in range(2):
+        try:
+            results = sparql.query().convert()
+            break
+        except Exception as err:
+            logger.error(f"idx:{idx}; query: {query1}: err: {err}")
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
         r0 = result['r0']['value'].replace('http://rdf.freebase.com/ns/', '')

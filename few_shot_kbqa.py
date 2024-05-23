@@ -220,7 +220,7 @@ def get_right_mid_set(fn, id_dict, question):
     type_to_mid_dict = {}
     type_list = []
     for mid in id_dict:
-        types = get_types(mid)
+        types = get_types(mid, logger)
         for cur_type in types:
             if not cur_type.startswith("common.") and not cur_type.startswith("base."):
                 if cur_type not in type_to_mid_dict:
@@ -331,7 +331,7 @@ def bound_to_existed(question, s_expression, found_mids, two_hop_rela_dict,
             possible_relationships_can += list(set(relas[0]))
             possible_relationships_can += list(set(relas[1]))
         else:
-            relas = get_2hop_relations(mid)
+            relas = get_2hop_relations(mid, logger)
             updating_two_hop_rela_dict[mid] = relas
             possible_relationships_can += list(set(relas[0]))
             possible_relationships_can += list(set(relas[1]))
@@ -430,7 +430,7 @@ def generate_answer(list_exp):
         except:
             continue
         try:
-            re = execute_query(sparql)
+            re = execute_query(sparql, logger)
         except:
             continue
         if re:
@@ -824,6 +824,7 @@ def process_one_example(
     '''
     answer_candi = []
     removed_none_candi = []
+    answer = None
     answer_to_grounded_dict = defaultdict(list) # 对于同一个答案，这里记录所有执行结果为这个答案的 lf
     '''gene_exps: 长度为 7 的 list, 每个元素形如 (JOIN (R people.person.profession) (AND (JOIN (R government.politician.government_positions_held) james k polk) (JOIN (R government.government_position_held.title) president)))'''
     scouts = gene_exps[:6] # 同一个问题，访问接口之后返回 7 个回答 (draft)，取前 6 个
