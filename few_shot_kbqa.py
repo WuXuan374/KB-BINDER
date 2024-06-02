@@ -54,7 +54,7 @@ def get_api_key():
     global api_call_count
     api_call_count += 1
     logger.info(f"api_call_count: {api_call_count}")
-    return "sk-ROoV4l0NELy39vGl45Fe5bDc7a954224A717BeFe4eCf10Ba"
+    return "sk-1c8bIaeuur9kAvsi04355047B3C443DaAd9642C80a48Cb51"
 
 def load_json(fname, mode="r", encoding="utf8"):
     if "b" in mode:
@@ -118,7 +118,8 @@ def type_generator(question, prompt_type, LLM_engine):
     prompt = prompt + " Question: " + question + "Type of the question: "
     logger.info(f"prompt length: {num_tokens_from_string(prompt)}")
     
-    for idx in range(2):
+    got_result = False
+    while got_result != True:
         try:
             openai.api_key = get_api_key()
             openai.api_base = "https://threefive.gpt7.link/v1"
@@ -132,10 +133,10 @@ def type_generator(question, prompt_type, LLM_engine):
                 presence_penalty=0,
                 stop=["Question: "]
             )
-            break
+            got_result = True
         except Exception as e:
-            logger.info(f"type_generator() exception: {e}; retrying idx: {idx}")
-            sleep(3)
+            logger.error(f"type_generator() exception: {e}")
+            sleep(10)
     gene_exp = answer_modi["choices"][0]['message']['content'].strip()
     return gene_exp
 
@@ -165,7 +166,9 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
     prompt = prompt + "Question: " + question + "\n" + "Logical Form: "
 
     logger.info(f"prompt length: {num_tokens_from_string(prompt)}")
-    for idx in range(2):
+    logger.info(f"prompt: {prompt[:100]}")
+    got_result = False
+    while got_result != True:
         try:
             openai.api_key = get_api_key()
             openai.api_base = "https://threefive.gpt7.link/v1"
@@ -180,10 +183,10 @@ def ep_generator(question, selected_examples, temp, que_to_s_dict_train, questio
                 stop=["Question: "],
                 n=7 # 默认对于一个问题给出 7 个回答
             )
-            break
+            got_result = True
         except Exception as e:
-            logger.error(f"ep_generator exception: {e}; retrying idx: {idx}")
-            sleep(3)
+            logger.error(f"ep_generator exception: {e}")
+            sleep(10)
     gene_exp = [exp['message']['content'].strip() for exp in answer_modi["choices"]] # TODO: 这里是不是把 KB-Binder(6) 写死了
     return gene_exp # 有时候，chatGPT 返回的多个结果是一致的
 
@@ -251,7 +254,50 @@ def get_right_mid_set(fn, id_dict, question):
         selected_mids += list(type_to_mid_dict[any_type].keys())
     return selected_mids
 
+'''GrailQA 版本'''
+# def from_fn_to_id_set(fn_list, question, name_to_id_dict, bm25_all_fns, all_fns):
+#     return_mid_list = []
+#     for fn_org in fn_list:
+#         drop_dot = fn_org.split()
+#         drop_dot = [seg.strip('.') for seg in drop_dot]
+#         drop_dot = " ".join(drop_dot)
+#         if fn_org.lower() not in question and drop_dot.lower() in question:
+#             fn_org = drop_dot
+#         if fn_org.lower() not in name_to_id_dict:
+#             logger.info("fn_org: {}".format(fn_org.lower()))
+#             tokenized_query = fn_org.lower().split()
+#             fn = bm25_all_fns.get_top_n(tokenized_query, all_fns, n=1)[0]
+#             logger.info("sub fn: {}".format(fn))
+#         else:
+#             fn = fn_org
+#         if fn.lower() in name_to_id_dict:
+#             id_dict = name_to_id_dict[fn.lower()]
+#         if len(id_dict) > 15:
+#             mids = get_right_mid_set(fn.lower(), id_dict, question)
+#         else:
+#             mids = sorted(id_dict.items(), key=lambda x: x[1], reverse=True)
+#             mids = [mid[0] for mid in mids]
+#         return_mid_list.append(mids)
+#     return return_mid_list
+
+
+
+# def convz_fn_to_mids(gene_exp, found_names, found_mids):
+#     if len(found_names) == 0:
+#         return gene_exp
+#     start_index = 0
+#     new_string = ''
+#     for name, mid in zip(found_names, found_mids):
+#         b_idx = gene_exp.lower().index(name)
+#         e_idx = b_idx + len(name)
+#         new_string = new_string + gene_exp[start_index:b_idx] + mid
+#         start_index = e_idx
+#     new_string = new_string + gene_exp[start_index:]
+#     return new_string
+
+'''WebQSP 版本, 来源 https://github.com/ltl3A87/KB-BINDER/issues/7; 应当也是 CWQ 版本'''
 def from_fn_to_id_set(fn_list, question, name_to_id_dict, bm25_all_fns, all_fns):
+    # logger.info("fn_list: {}".format(fn_list))
     return_mid_list = []
     for fn_org in fn_list:
         drop_dot = fn_org.split()
@@ -266,16 +312,22 @@ def from_fn_to_id_set(fn_list, question, name_to_id_dict, bm25_all_fns, all_fns)
             logger.info("sub fn: {}".format(fn))
         else:
             fn = fn_org
-        if fn.lower() in name_to_id_dict:
-            id_dict = name_to_id_dict[fn.lower()]
-        if len(id_dict) > 15:
-            mids = get_right_mid_set(fn.lower(), id_dict, question)
+        if fn.lower() == "president":
+            mids = ["m.060c4"]
+        elif fn.lower() == "voice":
+            mids = ["m.02nsjvf"]
+        elif fn.lower() == "marriage":
+            mids = ["m.04ztj"]
         else:
+            id_dict = name_to_id_dict[fn.lower()]
             mids = sorted(id_dict.items(), key=lambda x: x[1], reverse=True)
             mids = [mid[0] for mid in mids]
-        return_mid_list.append(mids)
+        mid_set = []
+        for mi in mids:
+            if mi not in mid_set:
+                mid_set.append(mi)
+        return_mid_list.append(mid_set)
     return return_mid_list
-
 
 
 def convz_fn_to_mids(gene_exp, found_names, found_mids):
@@ -284,12 +336,22 @@ def convz_fn_to_mids(gene_exp, found_names, found_mids):
     start_index = 0
     new_string = ''
     for name, mid in zip(found_names, found_mids):
-        b_idx = gene_exp.lower().index(name)
+        if name == "marriage":
+            b_idx = gene_exp.index("Marriage")
+        else:
+            b_idx = gene_exp.lower().index(name)
         e_idx = b_idx + len(name)
+        while gene_exp[b_idx-1] != " " or gene_exp[e_idx] != ")":
+            if name == "marriage":
+                b_idx = gene_exp[e_idx:].index("Marriage") + e_idx
+            else:
+                b_idx = gene_exp[e_idx:].lower().index(name) + e_idx
+            e_idx = b_idx + len(name)
         new_string = new_string + gene_exp[start_index:b_idx] + mid
         start_index = e_idx
     new_string = new_string + gene_exp[start_index:]
     return new_string
+
 
 def add_reverse(org_exp):
     final_candi = [org_exp]
@@ -619,13 +681,29 @@ def all_combiner_evaluation(data_batch, selected_quest_compare, selected_quest_c
     exec_time_list = [] # 每个问题运行时间
     for data_index, data in enumerate(data_batch):
         st_time = time.time()
-        answer, answer_to_grounded_dict = process_one_example(
-            data, retrieval, prompt_type, LLM_engine, selected_quest_compare, selected_quest, temp,
-            que_to_s_dict_train, question_to_mid_dict, corpus, nlp_model, bm25_train_full, retrieve_number,
-            selected_quest_compose, name_to_id_dict, bm25_all_fns, all_fns, relationship_to_enti, hsearcher, rela_corpus, relationships,
-            timeout_limit,
-            gold_answer_list, no_ans, correct, total
-        )
+        if data["id"] in ["WebQTest-1041"]:
+            logger.error(f"skip qid: {data['id']}")
+            answer = None
+            answer_to_grounded_dict = dict()
+            answer_to_grounded_dict[None] = list()
+            gold_answer_list.append(copy.deepcopy([
+                ans["answer_argument"] for ans in data["answer"]
+            ]))
+        else:
+            try:
+                answer, answer_to_grounded_dict = process_one_example(
+                    data, retrieval, prompt_type, LLM_engine, selected_quest_compare, selected_quest, temp,
+                    que_to_s_dict_train, question_to_mid_dict, corpus, nlp_model, bm25_train_full, retrieve_number,
+                    selected_quest_compose, name_to_id_dict, bm25_all_fns, all_fns, relationship_to_enti, hsearcher, rela_corpus, relationships,
+                    timeout_limit,
+                    gold_answer_list, no_ans, correct, total
+                )
+            except Exception as e:
+                logger.error(f"data_index: {data_index}; error: {e}")
+                answer = None
+                answer_to_grounded_dict = dict()
+                answer_to_grounded_dict[None] = list()
+
         logger.info("\n\n")
         logger.info(f"final answer after consistency check: {answer}")
         end_time = time.time()

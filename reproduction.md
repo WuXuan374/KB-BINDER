@@ -32,6 +32,10 @@ conda activate /home4/xwu/.conda/envs/kb-binder
     - 目的是可以检查是否超时；作为一个函数，超时的时候直接 return 即可（Python 没有 goto）
 - sparql_exe.py
     - SPARQL 查询增加失败重试机制
+- 0530, few_shot_kbqa.py
+    - issue https://github.com/ltl3A87/KB-BINDER/issues/7 说，运行 WebQSP 时要替换 from_fn_to_id_set 和 convz_fn_to_mids 函数
+    - 相应加了个 try-catch, 不然会报错
+    - 跳过 WebQSP WebQTest-575, 不知道为啥，会卡死在这
 # 关键点（坑）记录
 - 生成的 S-expression 是旧版格式的, 我们计算等价时做好适配
 - 不确定 openai 版本是啥，可能会报错
@@ -51,6 +55,7 @@ answer_to_grounded_dict[answer] 我们均视为 KB-BINDER 的输出
 
 # 代码执行
 - 执行之前检查一下 SPARQL 端口!
+- WebQSP 和 CWQ 有两个函数需要替换
 ## KB-BINDER (6) WebQSP 1000
 论文中说是 100 shot; 和论文一致，使用 DKILAB 端口
 ```
@@ -83,14 +88,103 @@ python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
 # 投稿论文代码执行
 Follow GrailQA 的设置，40 shot
 
-## CWQ
-CWQ 有几点需要注意
-- topic_entity 和 topic_entity_name
+## KB-BINDER (6) CWQ 1000
+使用的 key sk-ROoV4l0NELy39vGl45Fe5bDc7a954224A717BeFe4eCf10Ba
+SPARQL 端口 http://210.28.134.34:8890/sparql/
 
 ```
 python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
  --engine gpt-3.5-turbo-0613 \
  --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+由于发现缺少 log, 上面的程序运行完了前 100 个就先终止了，接下来运行 100-1000 --> 实际上只运行了 100-150
+
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.100_1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+... 接下来运行 150-1000
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.150_1000.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+## KB-BINDER (6) WebQSP 1000
+使用的 key sk-ROoV4l0NELy39vGl45Fe5bDc7a954224A717BeFe4eCf10Ba
+论文中说是 100 shot; 投稿版本使用 OFFICIAL 端口
+
+0-300 --> 实际上只运行了 0-200
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.0_300.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+0-50, 但是替换了 WebQSP 的两个函数，看看效果是否发生变化 --> 替换这两个函数非常有必要
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.0_50.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+50-200，使用的 key 是 sk-MULDnyMuh4HH4WcJ7fC6F2923b8246A9AbF205D1D9Bd50C6
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.50_200.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+200-250，使用的 key 是 sk-MULDnyMuh4HH4WcJ7fC6F2923b8246A9AbF205D1D9Bd50C6
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.200_400.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+250-349，使用的 key 是 sk-MULDnyMuh4HH4WcJ7fC6F2923b8246A9AbF205D1D9Bd50C6
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.250_400.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+349-500 使用的 key 是 sk-1c8bIaeuur9kAvsi04355047B3C443DaAd9642C80a48Cb51
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.349_500.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+500-800 使用的 key 是 sk-1c8bIaeuur9kAvsi04355047B3C443DaAd9642C80a48Cb51
+```
+python3 few_shot_kbqa.py --shot_num 100 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/webqsp_0107.train.json --eva_data_path data/paper/webqsp_0107.test.500_800.json \
+ --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
+```
+
+## KB-BINDER (6) CWQ 1000 重跑
+使用的 key sk-MULDnyMuh4HH4WcJ7fC6F2923b8246A9AbF205D1D9Bd50C6
+按照 issue 中的说法，替换了函数，看看效果是否有变化
+SPARQL 端口 http://210.28.134.34:8890/sparql/
+
+0_50
+```
+python3 few_shot_kbqa.py --shot_num 40 --temperature 0.3 \
+ --engine gpt-3.5-turbo-0613 \
+ --train_data_path data/cwq.train.json  --eva_data_path data/paper/cwq.test.0_50.json \
  --fb_roles_path data/fb_roles --surface_map_path data/surface_map_file_freebase_complete_all_mention --timeout_limit 600 --checkpoint_size 50
 ```
 

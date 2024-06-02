@@ -1,4 +1,6 @@
 import json
+import math
+import os
 
 def load_json(fname, mode="r", encoding="utf8"):
     if "b" in mode:
@@ -67,7 +69,76 @@ def get_cwq_subset():
             })
     dump_json(new_data, 'data/paper/cwq.test.1000.json')
 
+def split_cwq():
+    original_data = load_json('data/paper/cwq.test.1000.json')
+    split_data = original_data[:50]
+    dump_json(split_data, 'data/paper/cwq.test.0_50.json')
+
+def split_webqsp():
+    original_data = load_json('data/paper/webqsp_0107.test.1000.json')
+    split_data = original_data[500:800]
+    dump_json(split_data, 'data/paper/webqsp_0107.test.500_800.json')
+
+def calculate_result(data_file):
+    data = load_json(data_file)
+    f1_list = list()
+    time_list = list()
+    for item in data:
+        predicted_answer = item["predicted_answer"]
+        if predicted_answer is None:
+            predicted_answer = set()
+        p, r, f1 = get_PRF1(predicted_answer, item["gold_answer"])
+        f1_list.append(f1)
+        time_list.append(item["exection_time"])
+    print(f"average F1: {sum(f1_list) / len(f1_list)}")
+    print(f"Answer sEM: {len([_f1 for _f1 in f1_list if math.isclose(_f1, 1.0)]) / len(f1_list)}")
+    print(f"average time: {sum(time_list) / len(time_list)}")
+
+def get_PRF1(pred_answer, golden_answer):
+    pred_answer = set(pred_answer)
+    golden_answer = set(golden_answer)
+    if len(pred_answer)== 0:
+        if len(golden_answer)==0:
+            p=1
+            r=1
+            f=1
+        else:
+            p=0
+            r=0
+            f=0
+    elif len(golden_answer)==0:
+        p=0
+        r=0
+        f=0
+    else:
+        p = len(pred_answer & golden_answer)/ len(pred_answer)
+        r = len(pred_answer & golden_answer)/ len(golden_answer)
+        f = 2*(p*r)/(p+r) if p+r>0 else 0
+    return p, r, f
+
+def update_answer_patch():
+    # 代码 Bug 导致该分片记录的答案都是下一个样本的（详见对应目录的 README）；更新一下
+    src_data = load_json('data/paper/webqsp_0107.test.1000.json')
+    qid_to_answer = {
+        item['qid']: [ans["answer_argument"] for ans in item["answer"]]
+        for item in src_data
+    }
+    target_dir = "output/webqsp_0107.test.250_349.json_2024-06-01_11:18:52/_tmp"
+    updated_combined_result = list()
+    for tmp_idx in [0, 1]:
+        tmp_res = load_json(os.path.join(target_dir, f'{tmp_idx}.json'))
+        for _item in tmp_res:
+            qid = _item["qid"]
+            _item["gold_answer"] = qid_to_answer[qid]
+        updated_combined_result.extend(tmp_res)
+    dump_json(updated_combined_result, "output/webqsp_0107.test.250_349.json_2024-06-01_11:18:52/results.json")
+
+
 if __name__=='__main__':
     # get_webqsp_subset()
-    get_grailqa_subset()
+    # get_grailqa_subset()
     # get_cwq_subset()
+    # split_cwq()
+    split_webqsp()
+    # calculate_result('output/webqsp_0107.test.349_500.json_2024-06-01_20:33:10/results.json')
+    # update_answer_patch()

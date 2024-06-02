@@ -5,8 +5,8 @@ import urllib
 from pathlib import Path
 from tqdm import tqdm
 
-# sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP 和 GrailQA
-sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ
+# sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP (毕设) 和 GrailQA
+sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ 和 WebQSP (投稿)
 sparql.setReturnFormat(JSON)
 
 path = str(Path(__file__).parent.absolute())
@@ -291,7 +291,7 @@ def execute_query(query: str, logger) -> List[str]:
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
     rtn = []
     for result in results['results']['bindings']:
         assert len(result) == 1  # only select one variable
@@ -383,7 +383,7 @@ def get_types(entity: str, logger) -> List[str]:
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
     rtn = []
     for result in results['results']['bindings']:
         rtn.append(result['value']['value'].replace('http://rdf.freebase.com/ns/', ''))
@@ -841,7 +841,7 @@ def get_2hop_relations(entity: str, logger):
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query1}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
         r0 = result['r0']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -876,7 +876,7 @@ def get_2hop_relations(entity: str, logger):
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query2}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
     
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -912,7 +912,7 @@ def get_2hop_relations(entity: str, logger):
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query3}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
 
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
@@ -948,7 +948,7 @@ def get_2hop_relations(entity: str, logger):
             results = sparql.query().convert()
             break
         except Exception as err:
-            logger.error(f"idx:{idx}; query: {query4}: err: {err}")
+            logger.error(f"err: {str(err)[:100]}")
 
     for result in results['results']['bindings']:
         r1 = result['r1']['value'].replace('http://rdf.freebase.com/ns/', '')
