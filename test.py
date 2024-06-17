@@ -2,6 +2,7 @@ import logging
 import time
 from time import sleep
 import openai
+from sparql_exe import lisp_to_sparql
 
 def setup_custom_logger(log_file_name):
     formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
@@ -22,9 +23,10 @@ logger = setup_custom_logger("output/test/log.txt")
 from sparql_exe import execute_query, get_types, get_2hop_relations
 
 def test_sparql():
-    execute_query("PREFIX ns: <http://rdf.freebase.com/ns/>\nSELECT DISTINCT ?x\nWHERE {\nFILTER (?x != ns:m.0f8l9c)\nFILTER (!isLiteral(?x) OR lang(?x) = '' OR langMatches(lang(?x), 'en'))\nns:m.0f8l9c ns:location.location.adjoin_s ?y .\n?y ns:location.adjoining_relationship.adjoins ?x .\n?x ns:common.topic.notable_types ns:m.01mp .\n?x ns:location.statistical_region.size_of_armed_forces ?c .\n?c ns:measurement_unit.dated_integer.number \"101000\" . \n}", logger)
-    get_types("m.0f8l9c", logger)
-    get_2hop_relations("m.0f8l9c", logger)
+    # execute_query("PREFIX ns: <http://rdf.freebase.com/ns/>\nSELECT DISTINCT ?x\nWHERE {\nFILTER (?x != ns:m.0f8l9c)\nFILTER (!isLiteral(?x) OR lang(?x) = '' OR langMatches(lang(?x), 'en'))\nns:m.0f8l9c ns:location.location.adjoin_s ?y .\n?y ns:location.adjoining_relationship.adjoins ?x .\n?x ns:common.topic.notable_types ns:m.01mp .\n?x ns:location.statistical_region.size_of_armed_forces ?c .\n?c ns:measurement_unit.dated_integer.number \"101000\" . \n}", logger)
+    # get_types("m.0f8l9c", logger)
+    get_types("Adam", logger)
+    # get_2hop_relations("m.0f8l9c", logger)
 
 def test_gpt():
     for idx in range(2):
@@ -47,6 +49,34 @@ def test_gpt():
             logger.info(f"type_generator() exception: {e}; retrying idx: {idx}")
             sleep(3)
 
+def generate_answer(list_exp):
+    for exp in list_exp:
+        try:
+            sparql = lisp_to_sparql(exp)
+        except:
+            continue
+        try:
+            re = execute_query(sparql, logger)
+        except:
+            continue
+        if re:
+            if re[0].isnumeric():
+                if re[0] == '0':
+                    continue
+                else:
+                    return re
+            else:
+                return re
+    return None
+
+def test_executable_lf():
+    from sparql_exe import lisp_to_sparql
+    sexp = "(JOIN film.film.netflix_id \"60002655\") (JOIN (R film.film.film_casting_director) (JOIN (R film.film.film_casting_director) Ron Howard))"
+    sparql = lisp_to_sparql(sexp)
+    print(sparql)
+    print(generate_answer([sexp]))
+
 if __name__=="__main__":
     # test_sparql()
-    test_gpt()
+    # test_gpt()
+    test_executable_lf()

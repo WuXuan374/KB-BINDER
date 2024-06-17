@@ -5,8 +5,8 @@ import urllib
 from pathlib import Path
 from tqdm import tqdm
 
-# sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP (毕设) 和 GrailQA
-sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ 和 WebQSP (投稿)
+sparql = SPARQLWrapper("http://114.212.81.217:8896/sparql") # WebQSP (毕设) 和 GrailQA
+# sparql = SPARQLWrapper("http://210.28.134.34:8890/sparql/") # CWQ 和 WebQSP (投稿)
 sparql.setReturnFormat(JSON)
 
 path = str(Path(__file__).parent.absolute())

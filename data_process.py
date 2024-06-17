@@ -76,8 +76,13 @@ def split_cwq():
 
 def split_webqsp():
     original_data = load_json('data/paper/webqsp_0107.test.1000.json')
-    split_data = original_data[500:800]
-    dump_json(split_data, 'data/paper/webqsp_0107.test.500_800.json')
+    split_data = original_data[800:]
+    dump_json(split_data, 'data/paper/webqsp_0107.test.800_1000.json')
+
+def split_grailqa():
+    original_data = load_json('data/paper/grailqa_v1.0_dev.1000.json')
+    split_data = original_data[:300]
+    dump_json(split_data, 'data/paper/grailqa_v1.0_dev.0_300.json')
 
 def calculate_result(data_file):
     data = load_json(data_file)
@@ -133,12 +138,39 @@ def update_answer_patch():
         updated_combined_result.extend(tmp_res)
     dump_json(updated_combined_result, "output/webqsp_0107.test.250_349.json_2024-06-01_11:18:52/results.json")
 
+def combine_detection_result(parent_dir):
+    assert os.path.isdir(parent_dir)
+    combined_results = list()
+    for sub_dir in os.listdir(parent_dir):
+        sub_result = load_json(os.path.join(parent_dir, sub_dir, 'results.json'))
+        combined_results.extend(sub_result)
+    unique_keys = set([
+        item["qid"] for item in combined_results
+    ])
+    print(f"unique_keys: {len(unique_keys)}")
+    dump_json(combined_results, os.path.join(parent_dir, 'results.json'))
+
+def combine_tmp_result(parent_dir):
+    assert os.path.isdir(parent_dir)
+    combined_results = list()
+    for tmp_file in os.listdir(os.path.join(parent_dir, "_tmp", "")):
+        sub_result = load_json(os.path.join(parent_dir, "_tmp", tmp_file))
+        combined_results.extend(sub_result)
+    unique_keys = set([
+        item["qid"] for item in combined_results
+    ])
+    print(f"unique_keys: {len(unique_keys)}")
+    dump_json(combined_results, os.path.join(parent_dir, 'results.json'))
+
 
 if __name__=='__main__':
     # get_webqsp_subset()
     # get_grailqa_subset()
     # get_cwq_subset()
     # split_cwq()
-    split_webqsp()
-    # calculate_result('output/webqsp_0107.test.349_500.json_2024-06-01_20:33:10/results.json')
+    # split_webqsp()
+    # split_grailqa()
+    calculate_result('output/paper/webqsp_test_0_1000/results.json')
     # update_answer_patch()
+    # combine_detection_result("output/paper/webqsp_test_0_1000")
+    # combine_tmp_result("output/paper/webqsp_test_0_1000/webqsp_0107.test.200_250.json_2024-05-31_15:13:19")
